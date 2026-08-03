@@ -102,21 +102,25 @@ function authMiddleware(req, res, next) {
 
 // ============ BOT COMMANDS ============
 
+function escapeHtml(t) {
+    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 bot.onText(/\/start/, (msg) => {
-    const name = msg.from.first_name || 'User';
-    ensureUser(msg.from.id, name);
+    const rawName = msg.from.first_name || 'User';
+    ensureUser(msg.from.id, rawName);
 
     const url = WEBAPP_URL
-        ? `${WEBAPP_URL}?tg_id=${msg.from.id}&tg_name=${encodeURIComponent(name)}`
+        ? `${WEBAPP_URL}?tg_id=${msg.from.id}&tg_name=${encodeURIComponent(rawName)}`
         : '';
 
     if (url) {
         bot.sendMessage(msg.chat.id,
-            `⚡ *Welcome to Black Blade Data, ${name}!*\n\n` +
-            `Buy cheap MTN, Airtel, Glo & 9Mobile data at the best prices.\n\n` +
+            `⚡ Welcome to Black Blade Data, ${escapeHtml(rawName)}!\n\n` +
+            `Buy cheap MTN, Airtel, Glo &amp; 9Mobile data at the best prices.\n\n` +
             `👇 Tap below to open the app:`,
             {
-                parse_mode: 'Markdown',
+                parse_mode: 'HTML',
                 reply_markup: {
                     inline_keyboard: [[
                         { text: '🚀 Open Data Store', web_app: { url } }
@@ -126,15 +130,15 @@ bot.onText(/\/start/, (msg) => {
         );
     } else {
         bot.sendMessage(msg.chat.id,
-            `⚡ *Black Blade Data*\n\nSet WEBAPP_URL env variable to enable the web app.\n\nCommands:\n/balance - Check wallet`,
-            { parse_mode: 'Markdown' }
+            `⚡ Black Blade Data\n\nSet WEBAPP_URL env variable to enable the web app.\n\nCommands:\n/balance - Check wallet`,
+            { parse_mode: 'HTML' }
         );
     }
 });
 
 bot.onText(/\/balance/, (msg) => {
     const user = ensureUser(msg.from.id, msg.from.first_name);
-    bot.sendMessage(msg.chat.id, `💰 *Wallet Balance:* \u20A6${user.wallet.toFixed(2)}`, { parse_mode: 'Markdown' });
+    bot.sendMessage(msg.chat.id, `💰 Wallet Balance: ₦${user.wallet.toFixed(2)}`, { parse_mode: 'HTML' });
 });
 
 // ============ WEB APP API ============
@@ -204,12 +208,12 @@ app.post('/api/fund', authMiddleware, (req, res) => {
     // Notify owner
     if (OWNER_ID) {
         bot.sendMessage(OWNER_ID,
-            `💰 *Funding Request*\n\n` +
+            `💰 Funding Request\n\n` +
             `👤 ${user.name} (${user.phone || 'No phone'})\n` +
             `💵 Amount: ₦${amount}\n` +
             `🔄 Ref: ${payment.id.slice(0, 8)}\n\n` +
             `Use /approve ${payment.id.slice(0, 8)} or /reject ${payment.id.slice(0, 8)}`,
-            { parse_mode: 'Markdown' }
+            { parse_mode: 'HTML' }
         );
     }
 
@@ -252,14 +256,14 @@ app.post('/api/buy', authMiddleware, (req, res) => {
     if (OWNER_ID) {
         const netName = NETWORKS.find(n => n.id === network)?.name || network;
         bot.sendMessage(OWNER_ID,
-            `📡 *New Data Order*\n\n` +
+            `📡 New Data Order\n\n` +
             `👤 ${user.name}\n` +
             `🌐 ${netName} ${plan.label} (${plan.validity})\n` +
             `📱 ${phone}\n` +
             `💰 ₦${plan.price}\n` +
             `🆔 ${order.id.slice(0, 8)}\n\n` +
             `Use /done ${order.id.slice(0, 8)} to mark as delivered`,
-            { parse_mode: 'Markdown' }
+            { parse_mode: 'HTML' }
         );
     }
 
@@ -293,7 +297,7 @@ bot.onText(/\/approve (.+)/, (msg) => {
     const user = db.users[payment.userId];
     if (user) {
         user.wallet += payment.amount;
-        bot.sendMessage(payment.userId, `✅ *Wallet Funded!*\n\n₦${payment.amount} has been added to your wallet.\nNew balance: ₦${user.wallet.toFixed(2)}`, { parse_mode: 'Markdown' });
+        bot.sendMessage(payment.userId, `✅ Wallet Funded!\n\n₦${payment.amount} has been added to your wallet.\nNew balance: ₦${user.wallet.toFixed(2)}`, { parse_mode: 'HTML' });
     }
     saveDB(db);
     bot.sendMessage(msg.chat.id, `✅ Approved ₦${payment.amount} for ${user?.name || 'user'}.`);
@@ -323,8 +327,8 @@ bot.onText(/\/done (.+)/, (msg) => {
     const netName = NETWORKS.find(n => n.id === order.network)?.name || order.network;
     if (user) {
         bot.sendMessage(order.userId,
-            `✅ *Data Delivered!*\n\n${netName} ${order.planLabel} has been sent to ${order.phone}.\n\nThank you for using Black Blade! ⚡`,
-            { parse_mode: 'Markdown' }
+            `✅ Data Delivered!\n\n${netName} ${order.planLabel} has been sent to ${order.phone}.\n\nThank you for using Black Blade! ⚡`,
+            { parse_mode: 'HTML' }
         );
     }
     bot.sendMessage(msg.chat.id, `✅ Marked ${code} as delivered.`);
@@ -339,13 +343,13 @@ bot.onText(/\/users/, (msg) => {
     const pendingOrders = db.orders.filter(o => o.status === 'pending').length;
     const pendingFunds = db.payments.filter(p => p.status === 'pending').length;
     bot.sendMessage(msg.chat.id,
-        `📊 *Bot Stats*\n\n` +
+        `📊 Bot Stats\n\n` +
         `👥 Users: ${users.length}\n` +
         `💰 Total Wallets: ₦${totalWallet.toFixed(2)}\n` +
         `📦 Total Orders: ${totalOrders}\n` +
         `⏳ Pending Orders: ${pendingOrders}\n` +
         `💵 Pending Funds: ${pendingFunds}`,
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'HTML' }
     );
 });
 
